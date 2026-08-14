@@ -1,0 +1,10 @@
+{
+  "config_version": "1.0",
+  "exclude": [".git", ".venv", "node_modules", "build", "dist", "__pycache__"],
+  "max_files": 1000,
+  "max_file_bytes": 1048576,
+  "timeout_seconds": 10,
+  "error_threshold": 5,
+  "enabled_categories": ["structure", "tests", "ci", "dependencies", "secrets", "todos", "debt"]
+}
+

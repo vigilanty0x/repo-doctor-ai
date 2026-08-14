@@ -1,0 +1,33 @@
+{
+  "release": "0.1.0",
+  "measured_at": "2026-08-15",
+  "runtime_dependencies": 0,
+  "unit_tests": {
+    "count": 38,
+    "passed": 38,
+    "failed": 0,
+    "command": "PYTHONPATH=src python -m unittest discover -s tests -v"
+  },
+  "verification": {
+    "compileall": "passed",
+    "synthetic_demo": "DONE / WARN",
+    "self_audit": "DONE",
+    "json_output": "passed",
+    "sarif_output": "passed",
+    "journal_replay": "passed",
+    "wheel_build": "passed",
+    "isolated_install": "passed",
+    "installed_cli_version": "repo-doctor 0.1.0"
+  },
+  "wheel": {
+    "filename": "repo_doctor_ai-0.1.0-py3-none-any.whl",
+    "sha256": "70880f1b8af059617e85136bc30357eb0f4a8b47a9d2b495f9fbe595fb9936de"
+  },
+  "default_limits": {
+    "max_files": 10000,
+    "max_file_bytes": 1048576,
+    "timeout_seconds": 30,
+    "error_threshold": 20,
+    "journal_bytes": 67108864
+  }
+}

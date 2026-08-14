@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repo-doctor-ai"
+version = "0.1.0"
+description = "Evidence-first local repository audit"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "vigilanty0x"}]
+keywords = ["repository", "audit", "security", "ci", "technical-debt"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.scripts]
+repo-doctor = "repo_doctor_ai.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vigilanty0x/repo-doctor-ai"
+Issues = "https://github.com/vigilanty0x/repo-doctor-ai/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

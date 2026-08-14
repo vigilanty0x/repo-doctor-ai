@@ -1,0 +1,19 @@
+{
+  "format_version": "1.0",
+  "project": {
+    "name": "Repo Doctor AI",
+    "repository": "https://github.com/vigilanty0x/repo-doctor-ai",
+    "release": "0.1.0"
+  },
+  "assistance": {
+    "provider": "OpenAI",
+    "system": "Codex",
+    "model_family": "GPT-5",
+    "activities": ["architecture drafting", "implementation", "test design", "documentation"]
+  },
+  "human_role": ["scope selection", "architecture approval", "publication authorization", "release ownership"],
+  "verification": ["unit and adversarial tests", "isolated wheel installation", "self-audit", "credential and prohibited-reference scan", "CI"],
+  "limitations": ["static rules can miss issues", "no dependency vulnerability resolution", "no code execution or sandbox", "no remote model analysis"],
+  "data": {"fixtures": "synthetic", "private_inputs_in_repository": false, "source_sent_to_model_at_runtime": false}
+}
+
