@@ -13,6 +13,10 @@ from tests.helpers import healthy_repo
 
 
 class CliTests(unittest.TestCase):
+    def test_invalid_invocation_uses_documented_exit_three(self) -> None:
+        with redirect_stderr(io.StringIO()):
+            self.assertEqual(main(["scan", "--fail-on", "impossible"]), 3)
+
     def test_init_writes_valid_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "doctor.json"
@@ -76,7 +80,33 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, redirect_stderr(io.StringIO()):
             self.assertEqual(main(["scan", directory, "--journal", "events.jsonl"]), 3)
 
+    def test_output_cannot_alias_journal_or_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            root.mkdir()
+            (root / "README.md").write_text("# demo\n", encoding="utf-8")
+            journal = Path(directory) / "events.jsonl"
+            for output in (journal, journal.with_name(f".{journal.name}.lock")):
+                with redirect_stderr(io.StringIO()):
+                    code = main(
+                        [
+                            "scan",
+                            str(root),
+                            "--format",
+                            "json",
+                            "--output",
+                            str(output),
+                            "--journal",
+                            str(journal),
+                            "--run-id",
+                            "alias-test",
+                            "--fail-on",
+                            "none",
+                        ]
+                    )
+                self.assertEqual(code, 3)
+                self.assertFalse(journal.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,33 +1,55 @@
 {
-  "release": "0.1.0",
-  "measured_at": "2026-08-15",
+  "release": "0.2.0",
+  "measured_at": "2026-08-16",
   "runtime_dependencies": 0,
   "unit_tests": {
-    "count": 38,
-    "passed": 38,
+    "count": 104,
+    "passed": 104,
     "failed": 0,
-    "command": "PYTHONPATH=src python -m unittest discover -s tests -v"
+    "command": "PYTHONDONTWRITEBYTECODE=1 python scripts/check.py"
   },
   "verification": {
     "compileall": "passed",
     "synthetic_demo": "DONE / WARN",
-    "self_audit": "DONE",
+    "self_audit": "DONE / WARN, score 88 / managed",
     "json_output": "passed",
     "sarif_output": "passed",
+    "markdown_output": "passed",
+    "html_output": "passed",
+    "baseline_suppression": "passed",
+    "regression_diff": "passed",
+    "remediation_plan": "passed",
     "journal_replay": "passed",
-    "wheel_build": "passed",
-    "isolated_install": "passed",
-    "installed_cli_version": "repo-doctor 0.1.0"
+    "journal_concurrency_and_size_fence": "passed",
+    "journal_newline_and_alias_fences": "passed",
+    "strict_consumed_report_validation": "passed",
+    "global_output_redaction_and_terminal_safety": "passed",
+    "scanner_and_sbom_ancestor_race_confinement": "passed",
+    "plugin_deadline_and_identity_validation": "passed",
+    "cyclonedx_sbom": "passed",
+    "offline_wheel_build": "passed",
+    "offline_sdist_build_and_wheel_rebuild": "passed",
+    "wheel_sdist_content_parity": "passed",
+    "isolated_wheel_tests": "104 / 104 passed",
+    "isolated_sdist_tests": "104 / 104 passed",
+    "isolated_installed_workflows": "passed",
+    "installed_cli_version": "repo-doctor 0.2.0"
   },
   "wheel": {
-    "filename": "repo_doctor_ai-0.1.0-py3-none-any.whl",
-    "sha256": "70880f1b8af059617e85136bc30357eb0f4a8b47a9d2b495f9fbe595fb9936de"
+    "filename": "repo_doctor_ai-0.2.0-py3-none-any.whl",
+    "sha256": "59236abd12cf0f8e97e86934b3f801c20a463efaf5bcd4dbf31467fbda76452e"
   },
   "default_limits": {
     "max_files": 10000,
     "max_file_bytes": 1048576,
+    "max_total_bytes": 67108864,
     "timeout_seconds": 30,
     "error_threshold": 20,
-    "journal_bytes": 67108864
+    "max_findings": 5000,
+    "baseline_bytes": 4194304,
+    "report_bytes": 16777216,
+    "journal_bytes": 67108864,
+    "journal_event_bytes": 16777216,
+    "sbom_components": 50000
   }
 }

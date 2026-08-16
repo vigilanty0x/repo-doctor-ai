@@ -3,8 +3,12 @@
   "exclude": [".git", ".venv", "node_modules", "build", "dist", "__pycache__"],
   "max_files": 1000,
   "max_file_bytes": 1048576,
+  "max_total_bytes": 16777216,
   "timeout_seconds": 10,
   "error_threshold": 5,
-  "enabled_categories": ["structure", "tests", "ci", "dependencies", "secrets", "todos", "debt"]
+  "max_findings": 1000,
+  "enabled_categories": [
+    "structure", "tests", "ci", "dependencies", "secrets", "todos", "debt",
+    "repository", "ownership", "documentation", "release"
+  ]
 }
-

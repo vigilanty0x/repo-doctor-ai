@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=70"]
+requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "repo-doctor-ai"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-first local repository audit"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -34,4 +34,3 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

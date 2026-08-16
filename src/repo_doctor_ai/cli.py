@@ -11,15 +11,29 @@ import tempfile
 from typing import Any, Sequence
 
 from . import __version__
+from .baseline import BaselineError, baseline_from_report, load_baseline
 from .config import Config, ConfigError, load_config
+from .diffing import ReportDataError, diff_reports, load_report, render_diff_markdown
 from .journal import AuditJournal, JournalError
-from .models import Report, SEVERITY_ORDER
-from .rules import RULE_HELP
+from .planning import build_plan, render_plan_markdown
+from .registry import RegistryError
+from .reporting import serialize
+from .rules import RULE_HELP, build_default_registry
+from .sanitization import safe_output_text
+from .sbom import SbomError, build_sbom
 from .scanner import Scanner
 
 
+class DoctorArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise ConfigError(f"invalid command arguments: {message}")
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="repo-doctor", description="Audit a local repository and retain evidence for every finding.")
+    parser = DoctorArgumentParser(
+        prog="repo-doctor",
+        description="Audit a local repository and retain bounded evidence for every finding.",
+    )
     parser.add_argument("--version", action="version", version=f"repo-doctor {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -30,11 +44,36 @@ def _parser() -> argparse.ArgumentParser:
     scan = sub.add_parser("scan", help="scan a local repository")
     scan.add_argument("path", nargs="?", default=".")
     scan.add_argument("--config")
-    scan.add_argument("--format", choices=("text", "json", "sarif"), default="text")
+    scan.add_argument("--baseline", help="reviewed suppression baseline JSON")
+    scan.add_argument("--format", choices=("text", "json", "sarif", "markdown", "html"), default="text")
     scan.add_argument("--output")
     scan.add_argument("--fail-on", choices=("none", "low", "medium", "high", "critical"), default="high")
     scan.add_argument("--journal")
     scan.add_argument("--run-id")
+
+    baseline = sub.add_parser("baseline", help="create a reviewed suppression baseline from a JSON report")
+    baseline.add_argument("report")
+    baseline.add_argument("--output", default="repo-doctor-baseline.json")
+    baseline.add_argument("--reason", required=True)
+    baseline.add_argument("--expires", help="optional YYYY-MM-DD expiry")
+    baseline.add_argument("--force", action="store_true")
+
+    diff = sub.add_parser("diff", help="compare two JSON reports by stable fingerprint")
+    diff.add_argument("base")
+    diff.add_argument("current")
+    diff.add_argument("--format", choices=("json", "markdown"), default="markdown")
+    diff.add_argument("--output")
+    diff.add_argument("--fail-on-regression", action="store_true")
+
+    plan = sub.add_parser("plan", help="build an evidence-linked remediation plan from a JSON report")
+    plan.add_argument("report")
+    plan.add_argument("--format", choices=("json", "markdown"), default="markdown")
+    plan.add_argument("--output")
+
+    sbom = sub.add_parser("sbom", help="build an offline CycloneDX dependency inventory")
+    sbom.add_argument("path", nargs="?", default=".")
+    sbom.add_argument("--config")
+    sbom.add_argument("--output")
 
     replay = sub.add_parser("replay", help="validate an append-only audit journal")
     replay.add_argument("journal")
@@ -43,61 +82,9 @@ def _parser() -> argparse.ArgumentParser:
     explain = sub.add_parser("explain", help="explain a stable diagnostic code")
     explain.add_argument("code")
 
-    sub.add_parser("rules", help="list stable rule codes")
+    rules = sub.add_parser("rules", help="list stable diagnostics and registered rule plugins")
+    rules.add_argument("--format", choices=("text", "json"), default="text")
     return parser
-
-
-def _text(report: Report) -> str:
-    payload = report.as_dict()
-    lines = [
-        f"Repo Doctor: {payload['state']} / {payload['result']} ({payload['reason_code']})",
-        f"Scanned {payload['metrics']['files_scanned']} text files; {payload['summary']['total']} findings.",
-    ]
-    for finding in payload["findings"]:
-        location = finding["location"]
-        where = ""
-        if location:
-            where = f" {location['path']}"
-            if location["line"]:
-                where += f":{location['line']}"
-        lines.append(f"[{finding['severity'].upper()}] {finding['code']}{where} — {finding['message']}")
-        lines.append(f"  Evidence: {finding['evidence'] or 'none'}")
-        lines.append(f"  Fix: {finding['remediation']}")
-    return "\n".join(lines) + "\n"
-
-
-def _sarif(report: Report) -> dict[str, Any]:
-    rules: dict[str, dict[str, Any]] = {}
-    results: list[dict[str, Any]] = []
-    levels = {"info": "note", "low": "note", "medium": "warning", "high": "error", "critical": "error"}
-    for finding in report.findings:
-        rules.setdefault(
-            finding.code,
-            {
-                "id": finding.code,
-                "shortDescription": {"text": RULE_HELP.get(finding.code, finding.message)},
-                "help": {"text": finding.remediation},
-            },
-        )
-        result: dict[str, Any] = {
-            "ruleId": finding.code,
-            "level": levels[finding.severity],
-            "message": {"text": finding.message},
-            "fingerprints": {"repoDoctor": finding.fingerprint},
-            "properties": {"classification": finding.classification, "evidence": finding.evidence},
-        }
-        if finding.path:
-            region = {"startLine": finding.line} if finding.line else None
-            location: dict[str, Any] = {"physicalLocation": {"artifactLocation": {"uri": finding.path}}}
-            if region:
-                location["physicalLocation"]["region"] = region
-            result["locations"] = [location]
-        results.append(result)
-    return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "version": "2.1.0",
-        "runs": [{"tool": {"driver": {"name": "Repo Doctor AI", "version": __version__, "rules": list(rules.values())}}, "results": results}],
-    }
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -118,27 +105,60 @@ def _atomic_write(path: Path, content: str) -> None:
         raise
 
 
-def _serialize(report: Report, output_format: str) -> str:
-    if output_format == "text":
-        return _text(report)
-    payload = report.as_dict() if output_format == "json" else _sarif(report)
-    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+def _emit(content: str, output: str | None) -> None:
+    if output:
+        _atomic_write(Path(output), content)
+    else:
+        print(content, end="")
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n"
+
+
+def _paths_alias(first: str | Path, second: str | Path) -> bool:
+    left, right = Path(first), Path(second)
+    try:
+        if left.exists() and right.exists() and left.samefile(right):
+            return True
+    except OSError:
+        pass
+    try:
+        return left.resolve(strict=False) == right.resolve(strict=False)
+    except OSError:
+        return os.path.abspath(left) == os.path.abspath(right)
+
+
+def _reject_output_journal_alias(output: str | None, journal: str | None) -> None:
+    if not output or not journal:
+        return
+    journal_path = Path(journal)
+    lock_path = journal_path.with_name(f".{journal_path.name}.lock")
+    if _paths_alias(output, journal_path) or _paths_alias(output, lock_path):
+        raise ConfigError("--output must not alias --journal or its lock file")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
     try:
+        args = _parser().parse_args(argv)
         if args.command == "init":
             path = Path(args.path)
             if path.exists() and not args.force:
                 raise ConfigError(f"refusing to overwrite existing file: {path}")
             _atomic_write(path, json.dumps(Config().as_dict(), indent=2) + "\n")
-            print(f"wrote {path}")
+            print(f"wrote {safe_output_text(str(path))}")
             return 0
 
         if args.command == "rules":
-            for code in sorted(RULE_HELP):
-                print(f"{code}\t{RULE_HELP[code]}")
+            registry = build_default_registry()
+            if args.format == "json":
+                print(_json({"diagnostics": RULE_HELP, "plugins": registry.as_dict()}), end="")
+            else:
+                for code in sorted(RULE_HELP):
+                    print(f"{code}\t{RULE_HELP[code]}")
+                print("\nPlugins:")
+                for plugin in registry.plugins:
+                    print(f"{plugin.name}\t{plugin.category}\t{plugin.description}")
             return 0
 
         if args.command == "explain":
@@ -157,33 +177,65 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "states": [event["report"].get("state") for event in events],
             }
             if args.json_output:
-                print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+                print(json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False))
             else:
                 print(f"journal is valid ({len(events)} events)")
+            return 0
+
+        if args.command == "baseline":
+            output = Path(args.output)
+            if output.exists() and not args.force:
+                raise BaselineError(f"refusing to overwrite existing file: {output}")
+            baseline = baseline_from_report(load_report(args.report), reason=args.reason, expires=args.expires)
+            _atomic_write(output, _json(baseline.as_dict()))
+            print(f"wrote {safe_output_text(str(output))} ({len(baseline.entries)} entries)")
+            return 0
+
+        if args.command == "diff":
+            result = diff_reports(load_report(args.base), load_report(args.current))
+            content = _json(result) if args.format == "json" else render_diff_markdown(result)
+            _emit(content, args.output)
+            return 1 if args.fail_on_regression and result["regression"] else 0
+
+        if args.command == "plan":
+            result = build_plan(load_report(args.report))
+            content = _json(result) if args.format == "json" else render_plan_markdown(result)
+            _emit(content, args.output)
+            return 0
+
+        if args.command == "sbom":
+            result = build_sbom(args.path, load_config(args.config))
+            _emit(_json(result), args.output)
             return 0
 
         config = load_config(args.config)
         if bool(args.journal) != bool(args.run_id):
             raise ConfigError("--journal and --run-id must be provided together")
-        report = Scanner(config).scan(args.path)
+        _reject_output_journal_alias(args.output, args.journal)
+        baseline = load_baseline(args.baseline) if args.baseline else None
+        report = Scanner(config).scan(args.path, baseline=baseline)
         if args.journal:
             AuditJournal(args.journal).append(args.run_id, report.as_dict())
-        rendered = _serialize(report, args.format)
-        if args.output:
-            _atomic_write(Path(args.output), rendered)
-        else:
-            print(rendered, end="")
+        _emit(serialize(report, args.format), args.output)
 
         if report.status != "verified":
             return 2
         if args.fail_on != "none" and report.reaches(args.fail_on):
             return 1
         return 0
-    except (ConfigError, JournalError, OSError, ValueError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except (
+        BaselineError,
+        ConfigError,
+        JournalError,
+        OSError,
+        RegistryError,
+        ReportDataError,
+        SbomError,
+        ValueError,
+    ) as exc:
+        print(f"error: {safe_output_text(str(exc))}", file=sys.stderr)
         return 3
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
